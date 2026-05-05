@@ -156,7 +156,8 @@ void Cell_Update_Start(uint32_t id)
     
     uint8_t dir;
     uint16_t vel = fast_root(2 * cells[id].energy * 256 / (cells[id].Z * 2));
-    uint16_t move = rnd() % 256 < vel + 1;
+    // uint16_t move = rnd() % 256 < vel + 1;
+    uint16_t move = (cells[id].energy > 0);
     uint16_t x, y;
     x = cells[id].x;
     y = cells[id].y;
@@ -166,7 +167,7 @@ void Cell_Update_Start(uint32_t id)
     amount_of_active++;
     
     if(move == 0) return;
-    if(cells[id].dir == 8 || 1) cells[id].dir = rnd() % 8;
+    if(cells[id].dir == 8) cells[id].dir = rnd() % 8;
     
     dir = cells[id].dir;
     
@@ -187,7 +188,8 @@ void Cell_Update_Finish(uint32_t id)
     
     Tile *itself, *neighbor;
     int8_t dx, dy;
-    uint8_t mask, n_state;
+    int8_t vx1, vy1, vx2, vy2;
+    int8_t nx1, ny1, nx2, ny2;
     int16_t temp1;
     uint8_t membrane = Is_Membrane(x, y);
     int32_t minus_energy = 0, plus_energy, sum_energy, energy1;
@@ -200,6 +202,26 @@ void Cell_Update_Finish(uint32_t id)
         dy = dir_to_coords[dir][1];
         
         neighbor = Grid_Get(x + dx, y + dy);
+        
+        if(neighbor->type == 2)
+        {
+            vx1 = dir_to_coords[cells[id].dir][0];
+            vy1 = dir_to_coords[cells[id].dir][1];
+            
+            nx1 = vx1, ny1 = vy1;
+            
+            if( dx == 0 )
+            {
+                ny1 = -ny1;
+            }
+            if( dy == 0 )
+            {
+                nx1 = -nx1;
+            }
+            
+            cells[id].dir = coords_to_dir[1 + ny1][1 + nx1];
+        }
+        
         if(neighbor->type != 1) continue;
         
         sum_energy = cells[id].energy + cells[neighbor->id].energy;
@@ -284,8 +306,36 @@ void Cell_Update_Finish(uint32_t id)
             cells[id].energy = energy1;
             cells[neighbor->id].energy = sum_energy - energy1;
             
-            // cells[id].dir = rnd() % 9;
-            // cells[neighbor->id].dir = rnd() % 9;
+            vx1 = dir_to_coords[cells[id].dir][0];
+            vy1 = dir_to_coords[cells[id].dir][1];
+            vx2 = dir_to_coords[cells[neighbor->id].dir][0];
+            vy2 = dir_to_coords[cells[neighbor->id].dir][1];
+            
+            nx1 = vx1, ny1 = vy1, nx2 = vx2, ny2 = vy2;
+            
+            if( abs(vx1 + vx2) == 0 )
+            {
+                nx1 = rnd() % 3 - 1;
+                nx2 = - nx1;
+            }
+            else if( abs(vx1 + vx2) == 1 )
+            {
+                nx1 = sign(vx1 + vx2) * (rnd() % 2);
+                nx2 = sign(vx1 + vx2) - nx1;
+            }
+            if( abs(vy1 + vy2) == 0 )
+            {
+                ny1 = rnd() % 3 - 1;
+                ny2 = - ny1;
+            }
+            else if( abs(vy1 + vy2) == 1 )
+            {
+                ny1 = sign(vy1 + vy2) * (rnd() % 2);
+                ny2 = sign(vy1 + vy2) - ny1;
+            }
+            
+            cells[id].dir = coords_to_dir[1 + ny1][1 + nx1];
+            cells[neighbor->id].dir = coords_to_dir[1 + ny2][1 + nx2];
         }
     }
 }
@@ -382,24 +432,24 @@ uint32_t slater_sigma(uint8_t e) {
     
     uint32_t target_group = group_idx;
     
-    uint32_t sigma10000 = 0;
+    uint32_t sigma100 = 0;
     for (uint32_t g = 0; g <= target_group; g++) {
         if (g == target_group)
         {
             if(target_group == 1)
-                sigma10000 += 30 * (group_electrons[g] - 1);
+                sigma100 += 30 * (group_electrons[g] - 1);
             else
-                sigma10000 += 35 * (group_electrons[g] - 1);
+                sigma100 += 35 * (group_electrons[g] - 1);
         } else if (g == target_group - 1)
         {
-            sigma10000 += 85 * group_electrons[g];
+            sigma100 += 85 * group_electrons[g];
         } else
         {
-            sigma10000 += 100 * group_electrons[g];
+            sigma100 += 100 * group_electrons[g];
         }
     }
     
-    return sigma10000;
+    return sigma100;
 }
 
 uint32_t Energy(uint32_t id1, uint32_t id2, uint8_t links)
