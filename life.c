@@ -1,6 +1,6 @@
 #include "life.h"
 
-Cell cells[MAX_CELLS];
+Particle particles[MAX_PARTICLES];
 
 uint32_t next_id, free_id;
 
@@ -9,19 +9,19 @@ uint32_t mutation_rarity = 1000000;
 int16_t temp_control = 0;
 uint8_t temp_gradient = 10;
 
-uint32_t kinetic_energy, amount_of_active;
+uint32_t kinetic_energy, amount_of_particles;
 
 uint32_t Find_Free_Id()
 {
     uint32_t counter = 0;
-    while((cells[free_id].used != 0 || free_id == 0)
-    && counter < MAX_CELLS)
+    while((particles[free_id].used != 0 || free_id == 0)
+    && counter < MAX_PARTICLES)
     {
-        free_id = mod(free_id + 1, MAX_CELLS);
+        free_id = mod(free_id + 1, MAX_PARTICLES);
         counter++;
     }
     
-    if(cells[free_id].used == 0) return free_id;
+    if(particles[free_id].used == 0) return free_id;
     else 
     {
         printf("no free cells\n");
@@ -31,19 +31,44 @@ uint32_t Find_Free_Id()
 
 void Cells_Init()
 {
-    for(uint32_t id = 0; id < MAX_CELLS; id++)
+    for(uint32_t id = 0; id < MAX_PARTICLES; id++)
     {
-        cells[id].x = 0;
-        cells[id].y = 0;
-        cells[id].prev = 0;
-        cells[id].next = 0;
-        cells[id].used = 0;
+        particles[id].prev = 0;
+        particles[id].next = 0;
+        particles[id].used = 0;
         
-        cells[id].Z = 0;
-        cells[id].e = 0;
-        cells[id].energy = 0;
-        cells[id].shared = 0;
-        cells[id].dir = 8;
+        particles[id].rec_str = 0;
+        particles[id].on_edge = 0;
+        
+        for(int i = 0; i < 8; i++)
+        {
+            particles[id].links[i] = 0;
+            particles[id].buf_links[i] = 0;
+        }
+        
+        // {
+        //     Tile *tile = Grid_Get(x, y);
+        //     Tile *neighbor;
+            
+        //     int16_t nx, ny;
+        //     for(int dir = 0; dir < 8; dir++)
+        //     {
+        //         nx = x + dir_to_coords[dir][0];
+        //         ny = y + dir_to_coords[dir][1];
+        //         neighbor = Grid_Get(nx, ny);
+                
+        //         neighbor->links[mod(dir + 4, 8)] = 0;
+        //     }
+        // }
+        
+        particles[id].x = 0;
+        particles[id].y = 0;
+        
+        particles[id].Z = 0;
+        particles[id].e = 0;
+        particles[id].energy = 0;
+        particles[id].shared = 0;
+        particles[id].dir = 8;
     }
     
     free_id = 1;
@@ -65,20 +90,20 @@ void Cell_Create(int16_t x, int16_t y, uint32_t parent, uint8_t Z)
 
     if(id == 0) return;
     
-    cells[id].x = mod(x, grid_width);
-    cells[id].y = mod(y, grid_height);
-    cells[id].prev = cells[parent].prev;
-    cells[id].next = parent;
-    cells[id].used = 1;
+    particles[id].x = mod(x, grid_width);
+    particles[id].y = mod(y, grid_height);
+    particles[id].prev = particles[parent].prev;
+    particles[id].next = parent;
+    particles[id].used = 1;
     
-    cells[id].Z = Z;
-    cells[id].e = Z;
-    cells[id].energy = 0;
-    cells[id].shared = 0;
-    cells[id].dir = 8;
+    particles[id].Z = Z;
+    particles[id].e = Z;
+    particles[id].energy = 0;
+    particles[id].shared = 0;
+    particles[id].dir = 8;
     
-    cells[cells[id].prev].next = id;
-    cells[parent].prev = id;
+    particles[particles[id].prev].next = id;
+    particles[parent].prev = id;
     
     Grid_Get(x, y)->id = id;
 }
@@ -87,25 +112,25 @@ void Cell_Destroy(uint32_t id)
 {
     if(id == 0) return;
     
-    cells[cells[id].prev].next = cells[id].next;
-    cells[cells[id].next].prev = cells[id].prev;
+    particles[particles[id].prev].next = particles[id].next;
+    particles[particles[id].next].prev = particles[id].prev;
     
-    cells[id].used = 0;
+    particles[id].used = 0;
     
-    Grid_Get(cells[id].x, cells[id].y)->id = 0;
+    Grid_Get(particles[id].x, particles[id].y)->id = 0;
     
     free_id = id;
 }
 
 void Cells_Update()
 {
-    kinetic_energy = 0, amount_of_active = 0;
+    kinetic_energy = 0, amount_of_particles = 0;
     uint32_t id = 0;
     next_id = 0;
     do
     {
-        next_id = cells[id].next;
-        if(cells[id].used
+        next_id = particles[id].next;
+        if(particles[id].used
         )
         {
             Cell_Update_Start(id);
@@ -119,8 +144,8 @@ void Cells_Update()
     next_id = 0;
     do
     {
-        next_id = cells[id].next;
-        if(cells[id].used
+        next_id = particles[id].next;
+        if(particles[id].used
         )
         {
             Cell_Update_Finish(id);
@@ -130,63 +155,64 @@ void Cells_Update()
     }
     while(id != 0);
     
-    if(amount_of_active != 0) printf("total kinetic %5d\tenergy per active %3d\n", kinetic_energy, kinetic_energy / amount_of_active);
+    if(amount_of_particles != 0) printf("total kinetic %5d\tenergy per particle %3d\n", kinetic_energy, kinetic_energy / amount_of_particles);
 }
 
 void Cell_Update_Start(uint32_t id)
 {   
     if(rnd() % 1000 < abs(temp_control))
     {
-        cells[id].energy = max(cells[id].energy + sign(temp_control), 0);
+        particles[id].energy = max(particles[id].energy + sign(temp_control), 0);
     }
     
     if(temp_gradient)
     {
-        if(cells[id].x > grid_width / 2
-        && rnd() % (grid_width * 1000) < temp_gradient * (cells[id].x - grid_width / 2))
+        if(particles[id].x > grid_width / 2
+        && rnd() % (grid_width * 1000) < temp_gradient * (particles[id].x - grid_width / 2))
         {
-            cells[id].energy = max(cells[id].energy + 1, 0);
+            particles[id].energy = max(particles[id].energy + 1, 0);
         }
-        if(cells[id].x < grid_width / 2
-        && rnd() % (grid_width * 1000) < temp_gradient * (grid_width / 2 - cells[id].x))
+        if(particles[id].x < grid_width / 2
+        && rnd() % (grid_width * 1000) < temp_gradient * (grid_width / 2 - particles[id].x))
         {
-            cells[id].energy = max(cells[id].energy - 1, 0);
+            particles[id].energy = max(particles[id].energy - 1, 0);
         }
     }
     
     uint8_t dir;
-    uint16_t vel = fast_root(2 * cells[id].energy * 256 / (cells[id].Z * 2));
+    uint16_t vel = fast_root(2 * particles[id].energy * 256 / (particles[id].Z * 2));
     // uint16_t move = rnd() % 256 < vel + 1;
-    uint16_t move = (cells[id].energy > 0);
+    uint16_t move = (particles[id].energy > 0);
     uint16_t x, y;
-    x = cells[id].x;
-    y = cells[id].y;
+    x = particles[id].x;
+    y = particles[id].y;
     int16_t dx, dy;
     
-    kinetic_energy += cells[id].energy;
-    amount_of_active++;
+    kinetic_energy += particles[id].energy;
+    amount_of_particles++;
     
     if(move == 0) return;
-    if(cells[id].dir == 8) cells[id].dir = rnd() % 8;
+    if(particles[id].dir == 8) particles[id].dir = rnd() % 8;
     
-    dir = cells[id].dir;
+    dir = particles[id].dir;
     
     dx = dir_to_coords[dir][0];
     dy = dir_to_coords[dir][1];
     
-    Rec_Push_Flexible(x, y, dx, dy, cells[id].Z);
+    Rec_Push_Flexible(x, y, dx, dy, particles[id].Z);
 }
 
 void Cell_Update_Finish(uint32_t id)
 {
-    uint8_t req = Required_Electrons(cells[id].e);
+    uint8_t req = Required_Electrons(particles[id].e);
     if(req == 0) return;
 
     uint16_t x, y;
-    x = cells[id].x;
-    y = cells[id].y;
+    x = particles[id].x;
+    y = particles[id].y;
     
     Tile *itself, *neighbor;
+    Particle *itself_part, *neighbor_part;
     int8_t dx, dy;
     int8_t vx1, vy1, vx2, vy2;
     int8_t nx1, ny1, nx2, ny2;
@@ -195,6 +221,7 @@ void Cell_Update_Finish(uint32_t id)
     int32_t minus_energy = 0, plus_energy, sum_energy, energy1;
     
     itself = Grid_Get(x, y);
+    itself_part = &particles[itself->id];
     
     for(int dir = 0; dir < 8; dir++)
     {
@@ -202,11 +229,12 @@ void Cell_Update_Finish(uint32_t id)
         dy = dir_to_coords[dir][1];
         
         neighbor = Grid_Get(x + dx, y + dy);
+        neighbor_part = &particles[neighbor->id];
         
         if(neighbor->type == 2)
         {
-            vx1 = dir_to_coords[cells[id].dir][0];
-            vy1 = dir_to_coords[cells[id].dir][1];
+            vx1 = dir_to_coords[particles[id].dir][0];
+            vy1 = dir_to_coords[particles[id].dir][1];
             
             nx1 = vx1, ny1 = vy1;
             
@@ -219,28 +247,28 @@ void Cell_Update_Finish(uint32_t id)
                 nx1 = -nx1;
             }
             
-            cells[id].dir = coords_to_dir[1 + ny1][1 + nx1];
+            particles[id].dir = coords_to_dir[1 + ny1][1 + nx1];
         }
         
         if(neighbor->type != 1) continue;
         
-        sum_energy = cells[id].energy + cells[neighbor->id].energy;
+        sum_energy = particles[id].energy + particles[neighbor->id].energy;
         if(sum_energy != 0)
         {
-            cells[id].energy = 0;
-            cells[neighbor->id].energy = 0;
+            particles[id].energy = 0;
+            particles[neighbor->id].energy = 0;
         } 
         uint8_t stop = 0, broken = 0;
         
-        if(itself->links[dir] > 0 && neighbor->links[mod(dir + 4, 8)] > 0
+        if(itself_part->links[dir] > 0 && neighbor_part->links[mod(dir + 4, 8)] > 0
         )
         {
             
-            minus_energy = Energy(id, neighbor->id, itself->links[dir])
-            - Energy(id, neighbor->id, max(itself->links[dir] - 1, 0));
+            minus_energy = Energy(id, neighbor->id, itself_part->links[dir])
+            - Energy(id, neighbor->id, max(itself_part->links[dir] - 1, 0));
             while(
             (sum_energy > minus_energy && minus_energy >= 0
-            || minus_energy <= 0) && !stop && itself->links[dir] > 0
+            || minus_energy <= 0) && !stop && itself_part->links[dir] > 0
             )
             {
                 if( minus_energy <= 0
@@ -248,13 +276,13 @@ void Cell_Update_Finish(uint32_t id)
                 && minus_energy > 0)
                 {
                     // printf("breaking %d %d %d %d\n", sum_energy, minus_energy, id, neighbor->id);
-                    cells[id].shared--;
-                    cells[neighbor->id].shared--;
+                    particles[id].shared--;
+                    particles[neighbor->id].shared--;
                     Unlink_Two(x, y, x + dx, y + dy);
                     sum_energy -= minus_energy;
                     
-                    minus_energy = Energy(id, neighbor->id, itself->links[dir])
-                    - Energy(id, neighbor->id, max(itself->links[dir] - 1, 0));
+                    minus_energy = Energy(id, neighbor->id, itself_part->links[dir])
+                    - Energy(id, neighbor->id, max(itself_part->links[dir] - 1, 0));
             
                     broken = 1;
                 }
@@ -268,15 +296,15 @@ void Cell_Update_Finish(uint32_t id)
         {
             stop = 0;
             if(
-            cells[id].shared < Valence(cells[id].e)
-            && Required_Electrons(cells[id].e) - cells[id].shared > 0
-            && cells[neighbor->id].shared < Valence(cells[neighbor->id].e)
-            && Required_Electrons(cells[neighbor->id].e) - cells[neighbor->id].shared > 0
+            particles[id].shared < Valence(particles[id].e)
+            && Required_Electrons(particles[id].e) - particles[id].shared > 0
+            && particles[neighbor->id].shared < Valence(particles[neighbor->id].e)
+            && Required_Electrons(particles[neighbor->id].e) - particles[neighbor->id].shared > 0
             && 
             !stop)
             {
-                plus_energy = Energy(id, neighbor->id, itself->links[dir] + 1)
-                 - Energy(id, neighbor->id, itself->links[dir]);
+                plus_energy = Energy(id, neighbor->id, itself_part->links[dir] + 1)
+                 - Energy(id, neighbor->id, itself_part->links[dir]);
                 if(plus_energy >= 0
                 || (rnd() % 1000 < 1000 * (sum_energy + plus_energy) / -plus_energy
                 && plus_energy < 0)
@@ -284,14 +312,14 @@ void Cell_Update_Finish(uint32_t id)
                 {
                     
                     
-                    cells[id].shared++;
-                    cells[neighbor->id].shared++;
+                    particles[id].shared++;
+                    particles[neighbor->id].shared++;
                     Link_Two(x, y, x + dx, y + dy);
                     
                     sum_energy += plus_energy;
                 
-                    plus_energy = Energy(id, neighbor->id, itself->links[dir] + 1)
-                     - Energy(id, neighbor->id, itself->links[dir]);
+                    plus_energy = Energy(id, neighbor->id, itself_part->links[dir] + 1)
+                     - Energy(id, neighbor->id, itself_part->links[dir]);
                 }
                 else
                 {
@@ -303,13 +331,13 @@ void Cell_Update_Finish(uint32_t id)
         if(sum_energy >= 0)
         {
             energy1 = rnd() % (sum_energy + 1);
-            cells[id].energy = energy1;
-            cells[neighbor->id].energy = sum_energy - energy1;
+            particles[id].energy = energy1;
+            particles[neighbor->id].energy = sum_energy - energy1;
             
-            vx1 = dir_to_coords[cells[id].dir][0];
-            vy1 = dir_to_coords[cells[id].dir][1];
-            vx2 = dir_to_coords[cells[neighbor->id].dir][0];
-            vy2 = dir_to_coords[cells[neighbor->id].dir][1];
+            vx1 = dir_to_coords[particles[id].dir][0];
+            vy1 = dir_to_coords[particles[id].dir][1];
+            vx2 = dir_to_coords[particles[neighbor->id].dir][0];
+            vy2 = dir_to_coords[particles[neighbor->id].dir][1];
             
             nx1 = vx1, ny1 = vy1, nx2 = vx2, ny2 = vy2;
             
@@ -334,8 +362,8 @@ void Cell_Update_Finish(uint32_t id)
                 ny2 = sign(vy1 + vy2) - ny1;
             }
             
-            cells[id].dir = coords_to_dir[1 + ny1][1 + nx1];
-            cells[neighbor->id].dir = coords_to_dir[1 + ny2][1 + nx2];
+            particles[id].dir = coords_to_dir[1 + ny1][1 + nx1];
+            particles[neighbor->id].dir = coords_to_dir[1 + ny2][1 + nx2];
         }
     }
 }
@@ -454,30 +482,30 @@ uint32_t slater_sigma(uint8_t e) {
 
 uint32_t Energy(uint32_t id1, uint32_t id2, uint8_t links)
 {
-    uint32_t radius = cubic_root(50653 * cells[id1].Z) + cubic_root(50653 * cells[id2].Z);
+    uint32_t radius = cubic_root(50653 * particles[id1].Z) + cubic_root(50653 * particles[id2].Z);
     
     // printf("rad %d\n", radius);
     
-    uint32_t en1 = fast_root(4250 * cells[id1].Z) * (8 - Valence(cells[id1].e));
-    uint32_t en2 = fast_root(4250 * cells[id2].Z) * (8 - Valence(cells[id2].e));
+    uint32_t en1 = fast_root(4250 * particles[id1].Z) * (8 - Valence(particles[id1].e));
+    uint32_t en2 = fast_root(4250 * particles[id2].Z) * (8 - Valence(particles[id2].e));
     uint32_t delta_en = abs(en1 - en2);
     
-    uint32_t valence_repulsion = (Valence(cells[id1].e) + Valence(cells[id2].e));
+    uint32_t valence_repulsion = (Valence(particles[id1].e) + Valence(particles[id2].e));
     
     // printf("rad %d\n", valence_repulsion);
     
     
-    uint32_t e1 = 100 * cells[id1].e;
-    uint32_t e2 = 100 * cells[id2].e;
+    uint32_t e1 = 100 * particles[id1].e;
+    uint32_t e2 = 100 * particles[id2].e;
     
-    uint32_t sigma1 = slater_sigma(cells[id1].e);
-    uint32_t sigma2 = slater_sigma(cells[id2].e);
+    uint32_t sigma1 = slater_sigma(particles[id1].e);
+    uint32_t sigma2 = slater_sigma(particles[id2].e);
     
-    uint32_t Z1 = 100 * cells[id1].Z - sigma1;
-    uint32_t Z2 = 100 * cells[id2].Z - sigma2;
+    uint32_t Z1 = 100 * particles[id1].Z - sigma1;
+    uint32_t Z2 = 100 * particles[id2].Z - sigma2;
     
-    uint32_t N1 = Valence(cells[id1].e) - links;
-    uint32_t N2 = Valence(cells[id2].e) - links;
+    uint32_t N1 = Valence(particles[id1].e) - links;
+    uint32_t N2 = Valence(particles[id2].e) - links;
     
     uint32_t k = 57;
     
@@ -487,7 +515,7 @@ uint32_t Energy(uint32_t id1, uint32_t id2, uint8_t links)
     
     // energy = energy * 436 / 135;
     
-    // if(cells[id1].Z == 1 && cells[id2].Z == 7)
+    // if(particles[id1].Z == 1 && particles[id2].Z == 7)
     // {
     //     printf("Z1 %d Z2 %d links %d delta_en %d\n", Z1, Z2, links, delta_en);
     //     printf("%d - %d + %d = %d\n", 100 * links * fast_root(Z1 * Z2) / radius

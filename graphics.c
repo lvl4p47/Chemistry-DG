@@ -93,20 +93,14 @@ void Grid_Draw()
             {
                 tile = Grid_Get(j, i);
                 int type = tile->type;
-                int matter = tile->matter;
-                int energy = tile->energy;
                 uint32_t light = 0 * tile->light * 255 / max_light;
-                uint8_t *links = tile->links;
+                uint8_t *links = particles[tile->id].links;
                 
                 int r = 0, g = 0, b = 0;
                 
                 if(type == 1) total_matter++;
-                total_matter += matter;
-                total_energy += energy;
                     
-                r = (matter + (type == 1)) * 255 / (max_matter + 1);
                 g = (type == 1) * 127;
-                b = energy;
                 
                 rect.x = j * CELL_SIZE;
                 rect.y = i * CELL_SIZE;
@@ -151,14 +145,13 @@ void Grid_Draw()
             for(int j = 0; j < grid_width; j++)
             {
                 tile = Grid_Get(j, i);
-                int state = tile->state;
                 int type = tile->type;
                 int id = tile->id;
-                int Z = cells[id].Z;
+                int Z = particles[id].Z;
                 int per = Level(Z);
                 int val = Valence(Z);
                 int req = Required_Electrons(Z);
-                uint8_t *links = tile->links;
+                uint8_t *links = particles[tile->id].links;
                 
                 int r = 0, g = 0, b = 0;
                 
@@ -223,7 +216,7 @@ void Grid_Draw()
                     
                     if(links[dir])
                     {
-                        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                         SDL_RenderDrawLineF(renderer, cx, cy, cx + dx, cy + dy);
                         draw_dot = 1;
                     }

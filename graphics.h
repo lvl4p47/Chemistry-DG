@@ -3,21 +3,9 @@
 
 #include "life.h"
 
-// #define WINDOW_WIDTH 1920
-// #define WINDOW_HEIGHT 1080
-// #define CELL_SIZE 1
-
-// #define WINDOW_WIDTH 1366 // for small resolution screen
-// #define WINDOW_HEIGHT 768
-// #define CELL_SIZE 1
-
 #define WINDOW_WIDTH 1920 // for debugging
 #define WINDOW_HEIGHT 720
 #define CELL_SIZE 5
-
-// #define WINDOW_WIDTH 1920
-// #define WINDOW_HEIGHT 128
-// #define CELL_SIZE 1
 
 typedef enum
 {

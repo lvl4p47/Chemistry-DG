@@ -114,7 +114,7 @@ void Events_Handle()
             {
                 mmb_held = 1;
                 
-                cells[Grid_Get(x, y)->id].energy = 60000;
+                particles[Grid_Get(x, y)->id].energy = 60000;
                 
                 // Rec_Connect(x, y, 100);
                 // if(Grid_Get(x, y)->id == 0)

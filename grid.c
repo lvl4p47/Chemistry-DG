@@ -101,36 +101,8 @@ void Grid_Set(int16_t x, int16_t y, uint8_t type)
     uint16_t x1 = mod(x, grid_width);
     uint16_t y1 = mod(y, grid_height);
     
-    grid_array[y1][x1].state = 1;
-    grid_array[y1][x1].buf_state = 0;
-    grid_array[y1][x1].des_state = max_states - 1;
     grid_array[y1][x1].type = type;
-    grid_array[y1][x1].matter = 0;
-    grid_array[y1][x1].energy = 0;
-    grid_array[y1][x1].rec_str = 0;
-    grid_array[y1][x1].on_edge = 0;
     grid_array[y1][x1].id = 0;
-    
-    for(int i = 0; i < 8; i++)
-    {
-        grid_array[y1][x1].links[i] = 0;
-        grid_array[y1][x1].buf_links[i] = 0;
-    }
-    
-    {
-        Tile *tile = Grid_Get(x, y);
-        Tile *neighbor;
-        
-        int16_t nx, ny;
-        for(int dir = 0; dir < 8; dir++)
-        {
-            nx = x + dir_to_coords[dir][0];
-            ny = y + dir_to_coords[dir][1];
-            neighbor = Grid_Get(nx, ny);
-            
-            neighbor->links[mod(dir + 4, 8)] = 0;
-        }
-    }
 }
 
 void Grid_Move(int16_t x, int16_t y, int16_t dx, int16_t dy)
@@ -145,40 +117,31 @@ void Grid_Move(int16_t x, int16_t y, int16_t dx, int16_t dy)
     
     uint32_t id = grid_array[y1][x1].id;
     
-    cells[id].x = x2;
-    cells[id].y = y2;
+    particles[id].x = x2;
+    particles[id].y = y2;
     
-    grid_array[y2][x2].state = grid_array[y1][x1].state;
-    grid_array[y2][x2].buf_state = grid_array[y1][x1].buf_state;
-    grid_array[y2][x2].des_state = grid_array[y1][x1].des_state;
     grid_array[y2][x2].type = grid_array[y1][x1].type;
-    grid_array[y2][x2].matter = grid_array[y1][x1].matter;
-    grid_array[y2][x2].energy = grid_array[y1][x1].energy;
-    grid_array[y2][x2].rec_str = 0;
-    grid_array[y2][x2].on_edge = 0;
     grid_array[y2][x2].id = grid_array[y1][x1].id;
     
     for(int i = 0; i < 8; i++)
     {
-        grid_array[y2][x2].links[i] = grid_array[y1][x1].links[i];
-        grid_array[y2][x2].buf_links[i] = 0;
+        particles[grid_array[y2][x2].id].links[i] = particles[grid_array[y1][x1].id].links[i];
+        particles[grid_array[y2][x2].id].buf_links[i] = 0;
     }
     
-    grid_array[y1][x1].state = 0;
-    grid_array[y1][x1].buf_state = 0;
-    grid_array[y1][x1].des_state = 0;
     grid_array[y1][x1].type = 0;
-    grid_array[y1][x1].matter = 0;
-    grid_array[y1][x1].energy = 0;
-    grid_array[y1][x1].rec_str = 0;
-    grid_array[y1][x1].on_edge = 0;
     grid_array[y1][x1].id = 0;
     
     for(int i = 0; i < 8; i++)
     {
-        grid_array[y1][x1].links[i] = 0;
-        grid_array[y1][x1].buf_links[i] = 0;
+        particles[grid_array[y1][x1].id].links[i] = 0;
+        particles[grid_array[y1][x1].id].buf_links[i] = 0;
     }
+    
+    particles[grid_array[y1][x1].id].rec_str = 0;
+    particles[grid_array[y2][x2].id].rec_str = 0;
+    particles[grid_array[y1][x1].id].on_edge = 0;
+    particles[grid_array[y2][x2].id].on_edge = 0;
     
     if(x1 == grab_x && y1 == grab_y && lmb_held)
     {
@@ -209,33 +172,6 @@ void Grid_Maintain()
     }
 }
 
-void Grid_Signal(int16_t x, int16_t y, uint8_t state)
-{
-    Tile *itself, *neighbor;
-    int8_t dx, dy;
-    uint8_t mask;
-    uint8_t dir;
-    uint8_t rand = rnd() % 8;
-    
-    itself = Grid_Get(x, y);
-    itself->state = state;
-    
-    for(int rnd_dir = rand; rnd_dir < rand + 8; rnd_dir++)
-    {
-        dir = mod(rnd_dir, 8);
-        dx = dir_to_coords[dir][0];
-        dy = dir_to_coords[dir][1];
-        mask = (uint8_t)1 << dir;
-        
-        if(itself->links[dir])
-        {
-            neighbor = Grid_Get(x + dx, y + dy);
-            neighbor->state = 0;
-            break;
-        }
-    }
-}
-
 int32_t Rec_Can_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t strength, uint8_t rigid, uint8_t linked)
 {
     uint8_t local_debug = 0;
@@ -245,40 +181,44 @@ int32_t Rec_Can_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t strengt
     Tile *center = Grid_Get(x, y);
     Tile *neighbor;
     
+    Particle *center_part = &particles[center->id];
+    Particle *neighbor_part;
+    
     int32_t problems = 0;
     int32_t ret;
     
-    if(local_debug) printf("start x %d y %d str %d c %d\n", x, y, strength, center->links);
+    if(local_debug) printf("start x %d y %d str %d c %d\n", x, y, strength, center_part->links);
     
     if(strength == 0 || center->type == 0) 
     {
         if(local_debug) printf("too weak to move str %d\n", strength);
-        if(center->rec_str == 0 && center->type != 0)
+        if(center_part->rec_str == 0 && center->type != 0)
         {
             
-            center->rec_str = -1; // this tile was not reached
+            center_part->rec_str = -1; // this tile was not reached
             if(local_debug) printf("add solvable problem\n");
             return 1; // too weak to move, add solvable problem
         }
         else return 0; // can't reach now, but it was reached by some other branch
     }
     
-    center->on_edge = 2;
+    center_part->on_edge = 2;
     
-    if(center->rec_str == -1) // reached previously unreachable, str != 0
+    if(center_part->rec_str == -1) // reached previously unreachable, str != 0
     {
         if(local_debug) printf("solution\n");
         problems = -1;
-        center->rec_str = strength;
+        center_part->rec_str = strength;
     }
     
-    center->rec_str = strength;
+    center_part->rec_str = strength;
     
     neighbor = Grid_Get(x + dx, y + dy);
+    neighbor_part = &particles[neighbor->id];
     if(neighbor->type == 1)
     {
-        if(neighbor->rec_str < strength - 1
-        || neighbor->rec_str == 0
+        if(neighbor_part->rec_str < strength - 1
+        || neighbor_part->rec_str == 0
         )
         {
             ret = Rec_Can_Move(x + dx, y + dy, dx, dy, strength - 1, rigid, linked);
@@ -314,14 +254,15 @@ int32_t Rec_Can_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t strengt
         nx = x + Dx;
         ny = y + Dy;
         neighbor = Grid_Get(nx, ny);
+        neighbor_part = &particles[neighbor->id];
         
         if(neighbor->type == 1
-        && (neighbor->rec_str < strength - 1
-        || neighbor->rec_str == 0
+        && (neighbor_part->rec_str < strength - 1
+        || neighbor_part->rec_str == 0
         )
         )
         {
-            if(center->links[dir]
+            if(center_part->links[dir]
              || (linked == 0
              && (
              dir == mod(push_dir + 4, 8)
@@ -342,9 +283,9 @@ int32_t Rec_Can_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t strengt
                         max(abs(nx - x - dx), abs(ny - y - dy)) < 2
                         )
                         {
-                            if(neighbor->on_edge == 0)
-                                neighbor->on_edge = 1;
-                            neighbor->rec_str = 0;
+                            if(neighbor_part->on_edge == 0)
+                                neighbor_part->on_edge = 1;
+                            neighbor_part->rec_str = 0;
                             if(local_debug) printf("no tearing dir %d\n", dir);
                             problems -= ret;
                         }
@@ -367,7 +308,7 @@ int32_t Rec_Can_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t strengt
         }
     }
     
-    if(local_debug) printf("finish str %d problems %d c %d edge %d\n", strength, problems, center->links, center->on_edge);
+    if(local_debug) printf("finish str %d problems %d c %d edge %d\n", strength, problems, center_part->links, center_part->on_edge);
     
     return problems;
 }
@@ -379,14 +320,17 @@ void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved)
     y = mod(y, grid_height);
     Tile *center = Grid_Get(x, y);
     Tile *neighbor, *linked;
+    Particle *center_part = &particles[center->id];
+    Particle *neighbor_part;
+    
     int32_t problems = 0;
-    int32_t str = center->rec_str;
+    int32_t str = center_part->rec_str;
     if(str < -1) str = -1 - str;
     
     if(str <= 0) 
     {
-        if(center->rec_str == -1)
-            center->rec_str = 0;
+        if(center_part->rec_str == -1)
+            center_part->rec_str = 0;
         
         return;
     }
@@ -394,9 +338,10 @@ void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved)
     // if(local_debug) printf("x %d y %d str %d on_edge %d\n", x, y, str, center->on_edge);
     
     neighbor = Grid_Get(x + dx, y + dy);
+    neighbor_part = &particles[neighbor->id];
     if(neighbor->type == 1)
     {
-        if(neighbor->rec_str != 0 && neighbor->on_edge != 1)
+        if(neighbor_part->rec_str != 0 && neighbor_part->on_edge != 1)
         {
             // if(local_debug) printf("x %d y %d str %d front reaching x %d y %d str %d moved %d\n", x, y, str, x + dx, y + dy, neighbor->rec_str, *moved);
             
@@ -424,40 +369,41 @@ void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved)
             nx = x + Dx;
             ny = y + Dy;
             neighbor = Grid_Get(nx, ny);
+            neighbor_part = &particles[neighbor->id];
             if(
-            (center->links[dir] || center->buf_links[dir])
+            (center_part->links[dir] || center_part->buf_links[dir])
             && neighbor->type == 1
-            && neighbor->on_edge == 1
+            && neighbor_part->on_edge == 1
             && max(abs(nx - x - dx), abs(ny - y - dy)) < 2
             )
             {
-                if(local_debug) printf("x %d y %d str %d updating links with x %d y %d str %d on edge %d\n", x, y, str, x + Dx, y + Dy, neighbor->rec_str, neighbor->on_edge);
+                if(local_debug) printf("x %d y %d str %d updating links with x %d y %d str %d on edge %d\n", x, y, str, x + Dx, y + Dy, neighbor_part->rec_str, neighbor_part->on_edge);
                 
-                temp_links = center->links[dir];
-                n_temp_links = neighbor->links[mod(dir + 4, 8)];
+                temp_links = center_part->links[dir];
+                n_temp_links = neighbor_part->links[mod(dir + 4, 8)];
                 
-                center->links[dir] = 0; 
-                neighbor->links[mod(dir + 4, 8)] = 0;
+                center_part->links[dir] = 0; 
+                neighbor_part->links[mod(dir + 4, 8)] = 0;
                 
                 uint8_t new_dir = coords_to_dir[Dy - dy + 1][Dx - dx + 1];
                 
                 mask = (uint8_t)1 << new_dir;
                 opposite = (uint8_t)1 << mod(new_dir + 4, 8);
                 
-                center->buf_links[new_dir] = temp_links;
-                neighbor->buf_links[mod(new_dir + 4, 8)] = n_temp_links;
+                center_part->buf_links[new_dir] = temp_links;
+                neighbor_part->buf_links[mod(new_dir + 4, 8)] = n_temp_links;
             }
         }
         
         for(int i = 0; i < 8; i++)
         {
-            center->links[i] += center->buf_links[i];
-            center->buf_links[i] = 0;
+            center_part->links[i] += center_part->buf_links[i];
+            center_part->buf_links[i] = 0;
         }
         
         Grid_Move(x, y, dx, dy);
         *moved = *moved + 1;
-        center->on_edge = 0;
+        center_part->on_edge = 0;
         if(local_debug) printf("x %d y %d str %d moved %d\n", x, y, str, *moved);
         center = Grid_Get(x + dx, y + dy);
     }
@@ -469,15 +415,17 @@ void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved)
             for(int nx = x - 1; nx <= x + 1; nx++)
             {
                 neighbor = Grid_Get(nx, ny);
-                if(Active_Neighbors(nx, ny) == 0 && neighbor->on_edge == 1)
+                neighbor_part = &particles[neighbor->id];
+                
+                if(Active_Neighbors(nx, ny) == 0 && neighbor_part->on_edge == 1)
                 {
-                    if(local_debug) printf("x %d y %d str %d resetting 2 x %d y %d str %d\n", x, y, str, nx, ny, neighbor->rec_str);
-                    neighbor->on_edge = 0;
+                    if(local_debug) printf("x %d y %d str %d resetting 2 x %d y %d str %d\n", x, y, str, nx, ny, neighbor_part->rec_str);
+                    neighbor_part->on_edge = 0;
                     
                     for(int i = 0; i < 8; i++)
                     {
-                        neighbor->links[i] += neighbor->buf_links[i];
-                        neighbor->buf_links[i] = 0;
+                        neighbor_part->links[i] += neighbor_part->buf_links[i];
+                        neighbor_part->buf_links[i] = 0;
                     }
                 }
             }
@@ -491,13 +439,15 @@ void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved)
         for(int nx = x - 1; nx <= x + 1; nx++)
         {
             neighbor = Grid_Get(nx, ny);
+            neighbor_part = &particles[neighbor->id];
+            
             if(neighbor->type == 1
-            && (neighbor->rec_str >= str - 1
-            || neighbor->rec_str <= 0)
+            && (neighbor_part->rec_str >= str - 1
+            || neighbor_part->rec_str <= 0)
             )
             {
                 // if(local_debug) if(neighbor->rec_str > str) printf("%d > %d ", neighbor->rec_str, str - 1);
-                if(local_debug) printf("x %d y %d str %d side reaching x %d y %d str %d\n", x, y, str, nx, ny, neighbor->rec_str);
+                if(local_debug) printf("x %d y %d str %d side reaching x %d y %d str %d\n", x, y, str, nx, ny, neighbor_part->rec_str);
                 Rec_Move(nx, ny, dx, dy, moved);
             }
         }
@@ -508,15 +458,17 @@ void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved)
         for(int nx = x - 1; nx <= x + 1; nx++)
         {
             neighbor = Grid_Get(nx, ny);
-            if(Active_Neighbors(nx, ny) == 0 && neighbor->on_edge == 1)
+            neighbor_part = &particles[neighbor->id];
+            
+            if(Active_Neighbors(nx, ny) == 0 && neighbor_part->on_edge == 1)
             {
-                if(local_debug) printf("x %d y %d str %d resetting 3 x %d y %d str %d\n", x, y, str, nx, ny, neighbor->rec_str);
-                neighbor->on_edge = 0;
+                if(local_debug) printf("x %d y %d str %d resetting 3 x %d y %d str %d\n", x, y, str, nx, ny, neighbor_part->rec_str);
+                neighbor_part->on_edge = 0;
                 
                 for(int i = 0; i < 8; i++)
                 {
-                    neighbor->links[i] += neighbor->buf_links[i];
-                    neighbor->buf_links[i] = 0;
+                    neighbor_part->links[i] += neighbor_part->buf_links[i];
+                    neighbor_part->buf_links[i] = 0;
                 }
             }
         }
@@ -528,6 +480,7 @@ void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved)
 uint8_t Active_Neighbors(int16_t x, int16_t y)
 {
     Tile *neighbor;
+    Particle *neighbor_part;
     if(Grid_Get(x, y)->type != 1) return 1;
     for(int ny = y - 1; ny <= y + 1; ny++)
     {
@@ -536,7 +489,8 @@ uint8_t Active_Neighbors(int16_t x, int16_t y)
             if(nx != x || ny != y)
             {
                 neighbor = Grid_Get(nx, ny);
-                if(neighbor->rec_str != 0)
+                neighbor_part = &particles[neighbor->id];
+                if(neighbor_part->rec_str != 0)
                     return 1;
             }
         }
@@ -549,8 +503,11 @@ void Rec_Clean(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t depth)
     uint8_t local_debug = 0;
     Tile *center = Grid_Get(x, y);
     Tile *neighbor;
+    Particle *center_part = &particles[center->id];
+    Particle *neighbor_part;
+    
     int32_t problems = 0;
-    int32_t str = center->rec_str;
+    int32_t str = center_part->rec_str;
     // center->will_move = 0;
     if(depth < -1)
     {
@@ -562,21 +519,22 @@ void Rec_Clean(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t depth)
     if(local_debug) printf("x %d y %d str %d\n", x, y, str);
     
     neighbor = Grid_Get(x + dx, y + dy);
+    neighbor_part = &particles[neighbor->id];
     
     if(neighbor->type == 1)
     {
-        if(neighbor->rec_str == depth - 1
-        || neighbor->on_edge == 1)
+        if(neighbor_part->rec_str == depth - 1
+        || neighbor_part->on_edge == 1)
         {
-            if(local_debug) printf("x %d y %d str %d front reaching x %d y %d str %d\n", x, y, str, x + dx, y + dy, neighbor->rec_str);
+            if(local_debug) printf("x %d y %d str %d front reaching x %d y %d str %d\n", x, y, str, x + dx, y + dy, neighbor_part->rec_str);
             Rec_Clean(x + dx, y + dy, dx, dy, depth - 1);
         }
     }
-    if(center->rec_str == depth
-    || center->rec_str < 0)
+    if(center_part->rec_str == depth
+    || center_part->rec_str < 0)
     {
-        center->rec_str = 0;
-        center->on_edge = 0;
+        center_part->rec_str = 0;
+        center_part->on_edge = 0;
     }
     
     for(int ny = y - 1; ny <= y + 1; ny++)
@@ -584,13 +542,15 @@ void Rec_Clean(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t depth)
         for(int nx = x - 1; nx <= x + 1; nx++)
         {
             neighbor = Grid_Get(nx, ny);
+            neighbor_part = &particles[neighbor->id];
+            
             if(neighbor->type == 1
-            && (neighbor->rec_str == depth - 1
-            || neighbor->on_edge == 1)
+            && (neighbor_part->rec_str == depth - 1
+            || neighbor_part->on_edge == 1)
             )
             {
-                if(local_debug) if(neighbor->rec_str > str) printf("%d > %d ", neighbor->rec_str, str - 1);
-                if(local_debug) printf("x %d y %d str %d side reaching x %d y %d str %d\n", x, y, str, nx, ny, neighbor->rec_str);
+                if(local_debug) if(neighbor_part->rec_str > str) printf("%d > %d ", neighbor_part->rec_str, str - 1);
+                if(local_debug) printf("x %d y %d str %d side reaching x %d y %d str %d\n", x, y, str, nx, ny, neighbor_part->rec_str);
                 Rec_Clean(nx, ny, dx, dy, depth - 1);
             }
         }
@@ -683,13 +643,11 @@ uint32_t Rec_Push_Flexible(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t s
         {
             Rec_Push_Attempt(x, y, dx, dy, cur_str, 0);
             cur_str = strength + 1;
-            
         }
         else
         {
             Rec_Clean(x, y, dx, dy, cur_str);
-            cur_str++; 
-            
+            cur_str++;
         }
         
     }
@@ -725,6 +683,9 @@ void Rec_Link_All(int16_t x, int16_t y, int32_t strength)
 {
     Tile *center = Grid_Get(x, y);
     Tile *neighbor;
+    Particle *center_part = &particles[center->id];
+    Particle *neighbor_part;
+    
     uint8_t just_remove = 0;
     
     if(strength < -1 || (center->type == 0)) 
@@ -732,15 +693,17 @@ void Rec_Link_All(int16_t x, int16_t y, int32_t strength)
         return;
     }
     
-    center->rec_str = strength;
+    center_part->rec_str = strength;
     
     for(int ny = y - 1; ny <= y + 1; ny++)
     {
         for(int nx = x - 1; nx <= x + 1; nx++)
         {
             neighbor = Grid_Get(nx, ny);
+            neighbor_part = &particles[neighbor->id];
+            
             if(neighbor->type == 1
-            && neighbor->rec_str < strength - 1
+            && neighbor_part->rec_str < strength - 1
             || just_remove)
             {
                 Rec_Link_All(nx, ny, strength - 1);
@@ -758,19 +721,20 @@ void Rec_Link_All(int16_t x, int16_t y, int32_t strength)
         dx = dir_to_coords[dir][0];
         dy = dir_to_coords[dir][1];
         neighbor = Grid_Get(x + dx, y + dy);
+        neighbor_part = &particles[neighbor->id];
         
         if(just_remove)
         {
             continue;
         }
         
-        if(Count_Bits_8(center->links) < max_links
-        && Count_Bits_8(neighbor->links) < max_links)
+        if(Count_Bits_8(center_part->links) < max_links
+        && Count_Bits_8(neighbor_part->links) < max_links)
         {
             if(neighbor->type == 1)
             {
-                center->links[dir] += 1;
-                neighbor->links[mod(dir + 4, 8)] += 1;
+                center_part->links[dir] += 1;
+                neighbor_part->links[mod(dir + 4, 8)] += 1;
             }
         }
     }
@@ -782,19 +746,20 @@ void Rec_Link_All(int16_t x, int16_t y, int32_t strength)
         dx = dir_to_coords[dir][0];
         dy = dir_to_coords[dir][1];
         neighbor = Grid_Get(x + dx, y + dy);
+        neighbor_part = &particles[neighbor->id];
         
         if(just_remove)
         {
             continue;
         }
         
-        if(Count_Bits_8(center->links) < max_links
-        && Count_Bits_8(neighbor->links) < max_links)
+        if(Count_Bits_8(center_part->links) < max_links
+        && Count_Bits_8(neighbor_part->links) < max_links)
         {
             if(neighbor->type == 1)
             {
-                center->links[dir] += 1;
-                neighbor->links[mod(dir + 4, 8)] += 1;
+                center_part->links[dir] += 1;
+                neighbor_part->links[mod(dir + 4, 8)] += 1;
             }
         }
     }
@@ -804,6 +769,8 @@ void Link_Two(int16_t x1, int16_t y1, int16_t x2, int16_t y2)
 {
     Tile *center = Grid_Get(x1, y1);
     Tile *neighbor = Grid_Get(x2, y2);
+    Particle *center_part = &particles[center->id];
+    Particle *neighbor_part = &particles[neighbor->id];
 
     uint8_t mask, opposite;
     int16_t dx = x2 - x1;
@@ -818,8 +785,8 @@ void Link_Two(int16_t x1, int16_t y1, int16_t x2, int16_t y2)
     
     if(neighbor->type == 1 && center->type == 1)
     {
-        center->links[dir] += 1;
-        neighbor->links[mod(dir + 4, 8)] += 1;
+        center_part->links[dir] += 1;
+        neighbor_part->links[mod(dir + 4, 8)] += 1;
     }
 }
 
@@ -827,6 +794,8 @@ void Unlink_Two(int16_t x1, int16_t y1, int16_t x2, int16_t y2)
 {
     Tile *center = Grid_Get(x1, y1);
     Tile *neighbor = Grid_Get(x2, y2);
+    Particle *center_part = &particles[center->id];
+    Particle *neighbor_part = &particles[neighbor->id];
 
     int16_t dx = x2 - x1;
     int16_t dy = y2 - y1;
@@ -836,10 +805,10 @@ void Unlink_Two(int16_t x1, int16_t y1, int16_t x2, int16_t y2)
     uint8_t dir = coords_to_dir[dy + 1][dx + 1];
     
     if(neighbor->type == 1 && center->type == 1
-    && center->links[dir] > 0 && neighbor->links[mod(dir + 4, 8)] > 0)
+    && center_part->links[dir] > 0 && neighbor_part->links[mod(dir + 4, 8)] > 0)
     {
-        center->links[dir] -= 1;
-        neighbor->links[mod(dir + 4, 8)] -= 1;
+        center_part->links[dir] -= 1;
+        neighbor_part->links[mod(dir + 4, 8)] -= 1;
     }
 }
 
@@ -862,22 +831,6 @@ uint8_t Is_Membrane(int16_t x, int16_t y)
         neighbor = Grid_Get(x + dx, y + dy);
         
         if(neighbor->type == 0) counter++;
-    }
-    return counter;
-}
-
-uint8_t Neighbor_Energy(int16_t x, int16_t y)
-{
-    uint8_t counter = 0;
-    
-    int16_t dx, dy;
-    Tile *neighbor;
-    for(int dir = 0; dir < 8; dir++)
-    {
-        dx = dir_to_coords[dir][0];
-        dy = dir_to_coords[dir][1];
-        neighbor = Grid_Get(x + dx, y + dy);
-        counter += neighbor->energy;
     }
     return counter;
 }
@@ -975,11 +928,13 @@ uint16_t Rec_Find_Light(int16_t x, int16_t y, int32_t strength, uint16_t directi
     
     Tile *center = Grid_Get(x, y);
     Tile *neighbor;
+    Particle *center_part = &particles[center->id];
+    Particle *neighbor_part;
     
     if(strength == 0
     ) 
     {
-        center->rec_str = -1;
+        center_part->rec_str = -1;
         return 0;
     }
     if(x < 0 || y < 0
@@ -989,14 +944,14 @@ uint16_t Rec_Find_Light(int16_t x, int16_t y, int32_t strength, uint16_t directi
         return 0;
     }
     
-    if(local_debug) printf("\nx %d y %d field %d str %d start\n", x, y, center->rec_str, strength);
+    if(local_debug) printf("\nx %d y %d field %d str %d start\n", x, y, center_part->rec_str, strength);
     
-    if(center->light != 0 && center->rec_str <= 0)
+    if(center->light != 0 && center_part->rec_str <= 0)
     {
-        if(center->rec_str > -strength - 1)
-            center->rec_str = -strength - 1;
+        if(center_part->rec_str > -strength - 1)
+            center_part->rec_str = -strength - 1;
             
-        if(local_debug) printf("x %d y %d field %d str %d found light\n\n", x, y, center->rec_str, strength);
+        if(local_debug) printf("x %d y %d field %d str %d found light\n\n", x, y, center_part->rec_str, strength);
         return center->light;
     }
     
@@ -1021,7 +976,7 @@ uint16_t Rec_Find_Light(int16_t x, int16_t y, int32_t strength, uint16_t directi
         unfinished_directions++;
     }
     
-    center->rec_str = max(strength, center->rec_str);
+    center_part->rec_str = max(strength, center_part->rec_str);
     
     for(uint8_t dir = 0; dir < 8; dir++)
     {
@@ -1030,13 +985,14 @@ uint16_t Rec_Find_Light(int16_t x, int16_t y, int32_t strength, uint16_t directi
         nx = x + Dx;
         ny = y + Dy;
         neighbor = Grid_Get(nx, ny);
+        neighbor_part = &particles[neighbor->id];
         
         if(factors[dir] == 0) continue;
         
-        light_blocking = (neighbor->matter + (neighbor->type == 1)) * maximum / (max_matter + 1);
+        light_blocking = (neighbor_part->Z + (neighbor->type == 1)) * maximum / (max_matter + 1);
         
-        if(neighbor->rec_str < strength - 1 && neighbor->rec_str > 0
-        || neighbor->rec_str == 0
+        if(neighbor_part->rec_str < strength - 1 && neighbor_part->rec_str > 0
+        || neighbor_part->rec_str == 0
         )
             light_acc += min(max(Rec_Find_Light(nx, ny, strength - 1, direction, 0)
             - light_blocking + sun_height, 0), max_light) * factors[dir];
@@ -1044,10 +1000,10 @@ uint16_t Rec_Find_Light(int16_t x, int16_t y, int32_t strength, uint16_t directi
         {
             light_acc += min(max(neighbor->light
             - light_blocking + sun_height, 0), max_light) * factors[dir];
-            if(local_debug) printf("x %d y %d field %d str %d taken from x %d y %d\n\n", x, y, center->rec_str, strength, nx, ny);
+            if(local_debug) printf("x %d y %d field %d str %d taken from x %d y %d\n\n", x, y, center_part->rec_str, strength, nx, ny);
         }
         
-        if(neighbor->rec_str < 0)
+        if(neighbor_part->rec_str < 0)
             unfinished_directions--;
     }
     
@@ -1057,15 +1013,15 @@ uint16_t Rec_Find_Light(int16_t x, int16_t y, int32_t strength, uint16_t directi
     
     if(unfinished_directions == 0)
     {
-        center->rec_str = -strength - 1;
-        if(local_debug) printf("x %d y %d field %d str %d finished\n", x, y, center->rec_str, strength);
+        center_part->rec_str = -strength - 1;
+        if(local_debug) printf("x %d y %d field %d str %d finished\n", x, y, center_part->rec_str, strength);
     }
     else
     {
-        if(local_debug) printf("x %d y %d field %d str %d unfinished directions %d\n", x, y, center->rec_str, strength, unfinished_directions);
+        if(local_debug) printf("x %d y %d field %d str %d unfinished directions %d\n", x, y, center_part->rec_str, strength, unfinished_directions);
     }
     
-    if(local_debug) printf("x %d y %d field %d str %d end\n\n", x, y, center->rec_str, strength);
+    if(local_debug) printf("x %d y %d field %d str %d end\n\n", x, y, center_part->rec_str, strength);
     
     return center->light;
 }
@@ -1219,7 +1175,7 @@ void Illuminate()
             for(int x = 0; x < grid_width; x++)
             {
                 tile = Grid_Get(x, y);
-                tile->rec_str = 0;
+                particles[tile->id].rec_str = 0;
             }
         }
     }

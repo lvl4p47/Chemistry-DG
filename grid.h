@@ -9,16 +9,7 @@ extern uint8_t global_time;
 
 typedef struct {
     uint32_t id;
-    uint8_t state;
-    uint8_t buf_state;
-    uint8_t des_state;
     uint8_t type;
-    uint8_t matter;
-    uint8_t energy;
-    int32_t rec_str;
-    uint8_t on_edge;
-    uint8_t links[8];
-    uint8_t buf_links[8];
     uint16_t light;
     
     uint8_t pheromone[MAX_PHEROMONES][3];
@@ -66,8 +57,6 @@ static inline Tile* Grid_Get(int16_t x, int16_t y)
 void Grid_Set(int16_t x, int16_t y, uint8_t type);
 void Grid_Move(int16_t x, int16_t y, int16_t dx, int16_t dy);
 void Grid_Maintain();
-void Grid_Update();
-void Grid_Signal(int16_t x, int16_t y, uint8_t state);
 
 int32_t Rec_Can_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t strength, uint8_t rigid, uint8_t linked);
 void Rec_Move(int16_t x, int16_t y, int8_t dx, int8_t dy, uint32_t *moved);
@@ -83,7 +72,6 @@ void Link_Two(int16_t x1, int16_t y1, int16_t x2, int16_t y2);
 void Unlink_Two(int16_t x1, int16_t y1, int16_t x2, int16_t y2);
 void Rec_Connect(int16_t x, int16_t y, int32_t strength);
 uint8_t Is_Membrane(int16_t x, int16_t y);
-uint8_t Neighbor_Energy(int16_t x, int16_t y);
 
 void Global_Time_Update();
 void Phero_Set(int16_t x, int16_t y, uint8_t type, uint8_t range);
@@ -96,20 +84,27 @@ void Illuminate();
 
 // CELLS
 
-#define MAX_CELLS 4000000
+#define MAX_PARTICLES 4000000
 
 typedef struct {
-    uint16_t x;
-    uint16_t y;
+    // Structural variables
     uint8_t used;
     uint32_t prev;
     uint32_t next;
-    
+    // Pushing and Pulling variables
+    int32_t rec_str;
+    uint8_t on_edge;
+    uint8_t links[8];
+    uint8_t buf_links[8];
+    // Position
+    uint16_t x;
+    uint16_t y;
+    // Physical properties
     uint8_t Z, e;
     uint32_t energy;
     uint8_t shared, dir;
-} Cell;
+} Particle;
 
-extern Cell cells[MAX_CELLS];
+extern Particle particles[MAX_PARTICLES];
 
 #endif
