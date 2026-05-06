@@ -7,7 +7,7 @@ uint32_t next_id, free_id;
 uint32_t mutation_rarity = 1000000;
 
 int16_t temp_control = 0;
-uint8_t temp_gradient = 0;
+uint8_t temp_gradient = 1;
 uint8_t chem_bonds = 01;
 
 uint32_t kinetic_energy, amount_of_particles;
@@ -84,7 +84,7 @@ void Cell_Create(int16_t x, int16_t y, uint32_t parent, uint8_t Z)
     
     particles[id].Z = Z;
     particles[id].e = Z;
-    particles[id].energy = 1;
+    particles[id].energy = 0;
     particles[id].shared = 0;
     particles[id].dir = rnd() % 8;
     
@@ -92,19 +92,11 @@ void Cell_Create(int16_t x, int16_t y, uint32_t parent, uint8_t Z)
     particles[parent].prev = id;
     
     Tile *center = Grid_Get(x, y);
-    Tile *neighbor;
     Particle *tile_part = &particles[center->id];
-    Particle *neighbor_part;
         
-    int16_t nx, ny;
     for(int dir = 0; dir < 8; dir++)
     {
-        nx = x + dir_to_coords[dir][0];
-        ny = y + dir_to_coords[dir][1];
-        neighbor = Grid_Get(nx, ny);
-        neighbor_part = &particles[neighbor->id];
-        
-        neighbor_part->links[mod(dir + 4, 8)] = 0;
+        tile_part->links[dir] = 0;
     }
     
     Grid_Get(x, y)->id = id;
@@ -157,7 +149,7 @@ void Cells_Update()
     }
     while(id != 0);
     
-    if(amount_of_particles != 0) printf("total kinetic %5d\tenergy per particle %3d\n", kinetic_energy, kinetic_energy / amount_of_particles);
+    // if(amount_of_particles != 0) printf("total kinetic %5d\tenergy per particle %3d\n", kinetic_energy, kinetic_energy / amount_of_particles);
 }
 
 void Cell_Update_Movement(uint32_t id)
@@ -201,14 +193,11 @@ void Cell_Update_Movement(uint32_t id)
     dx = dir_to_coords[dir][0];
     dy = dir_to_coords[dir][1];
     
-    Rec_Push_Flexible(x, y, dx, dy, particles[id].Z);
+    Rec_Push_Flexible(x, y, dx, dy, 100);
 }
 
 void Cell_Update_Collision(uint32_t id)
 {
-    uint8_t req = Required_Electrons(particles[id].e);
-    if(req == 0) return;
-
     uint16_t x, y;
     x = particles[id].x;
     y = particles[id].y;
@@ -218,6 +207,7 @@ void Cell_Update_Collision(uint32_t id)
     int8_t dx, dy;
     int8_t vx1, vy1, vx2, vy2;
     int8_t nx1, ny1, nx2, ny2;
+    int8_t dvx, dvy;
     int16_t temp1;
     uint8_t membrane = Is_Membrane(x, y);
     int32_t minus_energy = 0, plus_energy, sum_energy, energy1;
@@ -243,12 +233,10 @@ void Cell_Update_Collision(uint32_t id)
             if( dx == 0 )
             {
                 ny1 = -ny1;
-                // printf("wall collision\n");
             }
             if( dy == 0 )
             {
                 nx1 = -nx1;
-                // printf("wall collision\n");
             }
             
             particles[id].dir = coords_to_dir[1 + ny1][1 + nx1];
@@ -261,7 +249,8 @@ void Cell_Update_Collision(uint32_t id)
         {
             particles[id].energy = 0;
             particles[neighbor->id].energy = 0;
-        } 
+        }
+        
         if(chem_bonds)
         {
             uint8_t stop = 0, broken = 0;
@@ -334,14 +323,12 @@ void Cell_Update_Collision(uint32_t id)
                 }
             }
         }
-        
-        if(sum_energy >= 0)
         {
             energy1 = rnd() % (sum_energy + 1);
             particles[id].energy = energy1;
             particles[neighbor->id].energy = sum_energy - energy1;
             
-            
+            if(itself_part->links[dir] == 0 || 1)
             {
                 vx1 = dir_to_coords[particles[id].dir][0];
                 vy1 = dir_to_coords[particles[id].dir][1];
@@ -350,49 +337,56 @@ void Cell_Update_Collision(uint32_t id)
                 
                 nx1 = vx1, ny1 = vy1, nx2 = vx2, ny2 = vy2;
                 
-                if( abs(vx1 + vx2) == 0 )
+                dvx = nx2 - nx1;
+                dvy = ny2 - ny1;
+                
+                while(
+                abs(nx1 - dx) < 2 &&
+                abs(ny1 - dy) < 2 &&
+                abs(nx2 + dx) < 2 &&
+                abs(ny2 + dy) < 2 &&
+                dvx * dx + dvy * dy < 0
+                )
                 {
-                    if(dx != 0)
-                    {
-                        nx1 = -dx;
-                        nx2 = +dx;
-                    }
+                    nx1 -= dx;
+                    ny1 -= dy;
+                    nx2 += dx;
+                    ny2 += dy;
+                    
+                    dvx = nx2 - nx1;
+                    dvy = ny2 - ny1;
                 }
-                else 
-                if( abs(vx1 + vx2) == 1 )
+                
+                particles[id].dir = coords_to_dir[1 + ny1][1 + nx1];
+                particles[neighbor->id].dir = coords_to_dir[1 + ny2][1 + nx2];
+            }
+            if(itself_part->links[dir] != 0 && 0)
+            {
+                vx1 = dir_to_coords[particles[id].dir][0];
+                vy1 = dir_to_coords[particles[id].dir][1];
+                vx2 = dir_to_coords[particles[neighbor->id].dir][0];
+                vy2 = dir_to_coords[particles[neighbor->id].dir][1];
+                
+                nx1 = vx1, ny1 = vy1, nx2 = vx2, ny2 = vy2;
+                
+                dvx = nx2 - nx1;
+                dvy = ny2 - ny1;
+                
+                while(
+                abs(nx1 - dx) < 2 &&
+                abs(ny1 - dy) < 2 &&
+                abs(nx2 + dx) < 2 &&
+                abs(ny2 + dy) < 2 &&
+                dvx * dx + dvy * dy > 0
+                )
                 {
-                    if(sign(vx1 + vx2) == dx)
-                    {
-                        nx1 = 0;
-                        nx2 = sign(vx1 + vx2);
-                    }
-                    if(sign(vx1 + vx2) == -dx)
-                    {
-                        nx1 = sign(vx1 + vx2);
-                        nx2 = 0;
-                    }
-                }
-                if( abs(vy1 + vy2) == 0 )
-                {
-                    if(dy != 0)
-                    {
-                        ny1 = -dy;
-                        ny2 = +dy;
-                    }
-                }
-                else 
-                if( abs(vy1 + vy2) == 1 )
-                {
-                    if(sign(vy1 + vy2) == dy)
-                    {
-                        ny1 = 0;
-                        ny2 = sign(vy1 + vy2);
-                    }
-                    if(sign(vy1 + vy2) == -dy)
-                    {
-                        ny1 = sign(vy1 + vy2);
-                        ny2 = 0;
-                    }
+                    nx1 += dx;
+                    ny1 += dy;
+                    nx2 -= dx;
+                    ny2 -= dy;
+                    
+                    dvx = nx2 - nx1;
+                    dvy = ny2 - ny1;
                 }
                 
                 particles[id].dir = coords_to_dir[1 + ny1][1 + nx1];

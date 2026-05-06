@@ -116,18 +116,14 @@ void Grid_Draw()
                 int16_t dx, dy, cx, cy;
                 cx = rect.x + CELL_SIZE / 2;
                 cy = rect.y + CELL_SIZE / 2;
-                for(uint8_t dir = 0; dir < 8; dir++)
+                uint8_t dir = particles[tile->id].dir;
                 {
                     dx = dir_to_coords[dir][0] * CELL_SIZE / 2;
                     dy = dir_to_coords[dir][1] * CELL_SIZE / 2;
-                    mask = (uint8_t)1 << dir;
                     
-                    if(links[dir])
-                    {
-                        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-                        SDL_RenderDrawLineF(renderer, cx, cy, cx + dx, cy + dy);
-                        draw_dot = 1;
-                    }
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                    SDL_RenderDrawLineF(renderer, cx, cy, cx + dx, cy + dy);
+                    draw_dot = 1;
                 }
                 
                 if(draw_dot && draw_dots)
@@ -232,22 +228,35 @@ void Grid_Draw()
         }
         break;
     case PHERO:
-        for(int i = 0; i < grid_height; i++)
+        for(int y = 0; y < grid_height; y++)
         {
-            for(int j = 0; j < grid_width; j++)
+            for(int x = 0; x < grid_width; x++)
             {
-                tile = Grid_Get(j, i);
+                SDL_Rect rect;
+                rect.x = 0;
+                rect.y = 0;
+                rect.w = CELL_SIZE;
+                rect.h = CELL_SIZE;
                 
+                SDL_Rect dot;
+                dot.x = 0;
+                dot.y = 0;
+                dot.w = 3;
+                dot.h = 3;
+                
+                Tile *tile;
+                tile = Grid_Get(x, y);
+                            
                 int c_0 = 0, c_1 = 0, c_2 = 0;
                 int r = 0, g = 0, b = 0;
-                c_0 = Phero_Get(j, i, 0, 0);
+                c_0 = Phero_Get(x, y, 0, 0);
                 
-                c_1 = Phero_Get(j, i, 1, 0);
+                c_1 = Phero_Get(x, y, 1, 0);
                 int count = 0;
                 for(int p = 2; p < MAX_PHEROMONES; p++)
                 {
                     count++;
-                    c_2 += Phero_Get(j, i, p, 0);
+                    c_2 += Phero_Get(x, y, p, 0);
                 }
                 
                 if(c_2 != 0) 
@@ -259,8 +268,8 @@ void Grid_Draw()
                 g = c_1;
                 b = c_2;
                 
-                rect.x = j * CELL_SIZE;
-                rect.y = i * CELL_SIZE;
+                rect.x = x * CELL_SIZE;
+                rect.y = y * CELL_SIZE;
                 
                 SDL_SetRenderDrawColor(renderer, r, g, b, 255);
                 SDL_RenderFillRect(renderer, &rect);

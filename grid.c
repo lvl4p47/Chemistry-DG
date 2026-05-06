@@ -30,7 +30,7 @@ uint16_t sun_light = 0;
 uint32_t day_length = 10000;
 
 uint8_t max_states = 4;
-uint8_t max_links = 3;
+uint8_t max_links = 2;
 
 void Grid_Init(uint16_t w, uint16_t h)
 {
@@ -641,7 +641,7 @@ uint32_t Rec_Push_Flexible(int16_t x, int16_t y, int8_t dx, int8_t dy, int32_t s
         
         if(ret <= 0) 
         {
-            Rec_Push_Attempt(x, y, dx, dy, cur_str, 0);
+            Rec_Push(x, y, dx, dy, cur_str, 0);
             cur_str = strength + 1;
         }
         else
@@ -727,11 +727,10 @@ void Rec_Link_All(int16_t x, int16_t y, int32_t strength)
         {
             continue;
         }
-        
-        if(Count_Bits_8(center_part->links) < max_links
-        && Count_Bits_8(neighbor_part->links) < max_links)
+        if(neighbor->type == 1)
         {
-            if(neighbor->type == 1)
+            if(center_part->links[dir] < max_links
+            && neighbor_part->links[mod(dir + 4, 8)] < max_links)
             {
                 center_part->links[dir] += 1;
                 neighbor_part->links[mod(dir + 4, 8)] += 1;
@@ -753,10 +752,10 @@ void Rec_Link_All(int16_t x, int16_t y, int32_t strength)
             continue;
         }
         
-        if(Count_Bits_8(center_part->links) < max_links
-        && Count_Bits_8(neighbor_part->links) < max_links)
+        if(neighbor->type == 1)
         {
-            if(neighbor->type == 1)
+            if(center_part->links[dir] < max_links
+            && neighbor_part->links[mod(dir + 4, 8)] < max_links)
             {
                 center_part->links[dir] += 1;
                 neighbor_part->links[mod(dir + 4, 8)] += 1;

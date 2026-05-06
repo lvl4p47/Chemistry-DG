@@ -34,7 +34,7 @@ void Events_Handle()
             }
             if(e.key.keysym.sym == SDLK_r)
             {
-                Grid_Reset(0, 1000);
+                // Grid_Reset(0, 1000);
             }
             if(e.key.keysym.sym == SDLK_t)
             {
@@ -114,9 +114,9 @@ void Events_Handle()
             {
                 mmb_held = 1;
                 
-                particles[Grid_Get(x, y)->id].energy = 60000;
+                // particles[Grid_Get(x, y)->id].energy = 60000;
                 
-                // Rec_Connect(x, y, 100);
+                Rec_Connect(x, y, 100);
                 // if(Grid_Get(x, y)->id == 0)
                     
                 // else
@@ -177,6 +177,8 @@ void Events_Handle()
             {
                 dest_x = x;
                 dest_y = y;
+                
+                Phero_Set(x, y, 0, 255);
             }
         }
     }
@@ -217,7 +219,7 @@ void Events_Process()
     
     if(Grid_Get(grab_x, grab_y)->type != 0 && str > 0)
     {
-        // Rec_Push(grab_x, grab_y, sx, sy, str, 0);
-        Rec_Push_Flexible(grab_x, grab_y, sx, sy, str);
+        Rec_Push(grab_x, grab_y, sx, sy, str, 0);
+        // Rec_Push_Flexible(grab_x, grab_y, sx, sy, str);
     }
 }
